@@ -94,7 +94,7 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 				}
 				top := r.HardWon[0]
 				note := ""
-				if top.Certified && top.CostMS > 0 {
+				if top.Certified && top.CostMS >= 1000 {
 					note = fmt.Sprintf("  (%s lost)", analyze.FmtDurMS(top.CostMS))
 				}
 				fmt.Fprintf(out, "  %-14s %d attempts before it worked%s\n", r.Tool, top.Attempts, note)

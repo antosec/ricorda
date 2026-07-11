@@ -13,6 +13,7 @@ import (
 
 	"github.com/antosec/ricorda/internal/analyze"
 	"github.com/antosec/ricorda/internal/paths"
+	"github.com/antosec/ricorda/internal/project"
 )
 
 // KeepMarker separates the generated part of a sheet from the user's own
@@ -81,7 +82,13 @@ func Write(r analyze.ToolReport, generatedOn string) (string, error) {
 	if len(r.HardWon) > 0 {
 		b.WriteString("## Hard-won (you fought for these)\n\n")
 		for _, h := range r.HardWon {
-			fmt.Fprintf(&b, "- `%s`  — took %d attempts%s\n", h.Command, h.Attempts, costNote(h))
+			loc := ""
+			if h.CWD != "" {
+				if l := project.Label(h.CWD); l != "" {
+					loc = " · in " + l
+				}
+			}
+			fmt.Fprintf(&b, "- `%s`  — took %d attempts%s%s\n", h.Command, h.Attempts, costNote(h), loc)
 		}
 		b.WriteString("\n")
 	}
@@ -109,7 +116,7 @@ func costNote(h analyze.HardWon) string {
 	if !h.Certified {
 		return ""
 	}
-	if h.CostMS <= 0 {
+	if h.CostMS < 1000 { // sub-second fights: the badge alone is enough
 		return " (certified)"
 	}
 	return fmt.Sprintf(" (%s of fighting, certified)", analyze.FmtDurMS(h.CostMS))
