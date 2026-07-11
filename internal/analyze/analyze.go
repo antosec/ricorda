@@ -453,6 +453,21 @@ func clip(s string) string {
 	return s
 }
 
+// ToolOf extracts the tool a command belongs to, or "" when the command is
+// noise or a help lookup. It is the single classification entry point for
+// callers outside analysis (the whisper path).
+func ToolOf(cmd string) string {
+	c := normalize(cmd)
+	if c == "" {
+		return ""
+	}
+	tool, _, isHelp := classify(c)
+	if isHelp || tool == "" || noise[tool] {
+		return ""
+	}
+	return tool
+}
+
 // FmtDurMS renders a fight cost for humans: 45s, 23m, 1h05m.
 func FmtDurMS(ms int64) string {
 	d := time.Duration(ms) * time.Millisecond

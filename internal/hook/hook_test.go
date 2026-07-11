@@ -129,6 +129,9 @@ func TestEveryShellHasABlock(t *testing.T) {
 		if !strings.Contains(b, "journal add --shell "+s) {
 			t.Fatalf("block for %s does not feed the journal", s)
 		}
+		if !strings.Contains(b, "ricorda whisper --exit") {
+			t.Fatalf("block for %s never whispers on failure", s)
+		}
 	}
 	if BlockFor("nushell") != "" {
 		t.Fatal("unknown shell should return empty block")

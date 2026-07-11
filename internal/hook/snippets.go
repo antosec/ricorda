@@ -42,6 +42,9 @@ function global:prompt {
             $__psi.UseShellExecute = $false
             $__psi.CreateNoWindow = $true
             [void][System.Diagnostics.Process]::Start($__psi)
+            if ($__exit -ne 0) {
+                try { & ricorda whisper --exit $__exit --cmd-b64 $__cmd64 --cwd-b64 $__cwd64 } catch {}
+            }
         }
     } catch {}
     & $global:__ricorda_prev_prompt
@@ -76,7 +79,12 @@ __ricorda_prompt() {
                 [ "$__dur" -lt 0 ] && __dur=0
             fi
             if command -v ricorda >/dev/null 2>&1; then
-                (ricorda journal add --shell bash --exit "$__ex" --dur-ms "$__dur" --cwd "$PWD" --cmd-b64 "$(printf %s "$__cmd" | base64 2>/dev/null | tr -d '\n')" >/dev/null 2>&1 &)
+                local __b64
+                __b64=$(printf %s "$__cmd" | base64 2>/dev/null | tr -d '\n')
+                (ricorda journal add --shell bash --exit "$__ex" --dur-ms "$__dur" --cwd "$PWD" --cmd-b64 "$__b64" >/dev/null 2>&1 &)
+                if [ "$__ex" -ne 0 ]; then
+                    ricorda whisper --exit "$__ex" --cwd "$PWD" --cmd-b64 "$__b64" 2>/dev/null
+                fi
             fi
         fi
     fi
@@ -103,7 +111,12 @@ __ricorda_precmd() {
         __dur=${__dur%.*}
     fi
     if command -v ricorda >/dev/null 2>&1; then
-        (ricorda journal add --shell zsh --exit "$__ex" --dur-ms "$__dur" --cwd "$PWD" --cmd-b64 "$(printf %s "$__ricorda_cmd" | base64 | tr -d '\n')" >/dev/null 2>&1 &)
+        local __b64
+        __b64=$(printf %s "$__ricorda_cmd" | base64 | tr -d '\n')
+        (ricorda journal add --shell zsh --exit "$__ex" --dur-ms "$__dur" --cwd "$PWD" --cmd-b64 "$__b64" >/dev/null 2>&1 &)
+        if [ "$__ex" -ne 0 ]; then
+            ricorda whisper --exit "$__ex" --cwd "$PWD" --cmd-b64 "$__b64" 2>/dev/null
+        fi
     fi
     __ricorda_cmd=
     __ricorda_t0=
@@ -119,8 +132,12 @@ function __ricorda_postexec --on-event fish_postexec
     if not type -q ricorda
         return
     end
-    ricorda journal add --shell fish --exit $__ex --dur-ms $__dur --cwd $PWD --cmd-b64 (printf %s "$argv[1]" | base64 | tr -d \n) >/dev/null 2>&1 &
+    set -l __b64 (printf %s "$argv[1]" | base64 | tr -d \n)
+    ricorda journal add --shell fish --exit $__ex --dur-ms $__dur --cwd $PWD --cmd-b64 $__b64 >/dev/null 2>&1 &
     disown 2>/dev/null
+    if test $__ex -ne 0
+        ricorda whisper --exit $__ex --cwd $PWD --cmd-b64 $__b64 2>/dev/null
+    end
 end`,
 }
 

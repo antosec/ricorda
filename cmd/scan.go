@@ -10,6 +10,7 @@ import (
 
 	"github.com/antosec/ricorda/internal/analyze"
 	"github.com/antosec/ricorda/internal/history"
+	"github.com/antosec/ricorda/internal/index"
 	"github.com/antosec/ricorda/internal/journal"
 	"github.com/antosec/ricorda/internal/sheet"
 	"github.com/spf13/cobra"
@@ -49,6 +50,9 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 
 		reports := analyze.Analyze(entries)
 		reports = analyze.Certify(reports, jour)
+		if err := index.Write(reports); err != nil {
+			return err
+		}
 
 		written := 0
 		when := time.Now().Format("2006-01-02")
