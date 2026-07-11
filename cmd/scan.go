@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/antosec/ricorda/internal/analyze"
@@ -32,7 +35,7 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 				continue
 			}
 			found++
-			fmt.Fprintf(out, "  %-6s %6d commands  (%s)\n", s.Name, len(s.Entries), s.Path)
+			fmt.Fprintf(out, "  %-6s %6d commands  (%s)\n", s.Name, len(s.Entries), friendly(s.Path))
 			entries = append(entries, s.Entries...)
 		}
 		if found == 0 {
@@ -61,27 +64,47 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 			return err
 		}
 		fmt.Fprintf(out, "\nScanned %d commands across %d source(s).\n", len(entries), found)
-		fmt.Fprintf(out, "Wrote %d cheatsheet(s) → %s\n", written, dir)
+		fmt.Fprintf(out, "Wrote %d cheatsheet(s) → %s\n", written, friendly(dir))
 
-		top := make([]analyze.ToolReport, len(reports))
-		copy(top, reports)
-		sort.Slice(top, func(i, j int) bool { return len(top[i].HardWon) > len(top[j].HardWon) })
-		shown := 0
-		for _, r := range top {
-			if len(r.HardWon) == 0 || shown >= 3 {
-				break
+		// Rank fights by the single worst battle: HardWon is sorted by
+		// attempts, so index 0 is each tool's hardest command.
+		var fights []analyze.ToolReport
+		for _, r := range reports {
+			if len(r.HardWon) == 0 {
+				continue
 			}
-			if shown == 0 {
-				fmt.Fprintf(out, "\nYour biggest fights:\n")
+			if _, err := sheet.PathFor(r.Tool); err == nil {
+				fights = append(fights, r)
 			}
-			fmt.Fprintf(out, "  %-14s %d hard-won command(s)\n", r.Tool, len(r.HardWon))
-			shown++
 		}
-		if first := firstTool(reports); first != "" {
+		sort.Slice(fights, func(i, j int) bool {
+			return fights[i].HardWon[0].Attempts > fights[j].HardWon[0].Attempts
+		})
+		if len(fights) > 0 {
+			fmt.Fprintf(out, "\nYour biggest fights:\n")
+			for i, r := range fights {
+				if i >= 3 {
+					break
+				}
+				fmt.Fprintf(out, "  %-14s %d attempts before it worked\n", r.Tool, r.HardWon[0].Attempts)
+			}
+			fmt.Fprintf(out, "\nTry: ricorda %s\n", fights[0].Tool)
+		} else if first := firstTool(reports); first != "" {
 			fmt.Fprintf(out, "\nTry: ricorda %s\n", first)
 		}
 		return nil
 	},
+}
+
+// friendly shortens a path for display: the home directory becomes ~ and
+// separators are normalized. Keeps output tidy and avoids echoing usernames.
+func friendly(p string) string {
+	if home, err := os.UserHomeDir(); err == nil {
+		if rest, ok := strings.CutPrefix(p, home); ok {
+			p = "~" + rest
+		}
+	}
+	return filepath.ToSlash(p)
 }
 
 func firstTool(reports []analyze.ToolReport) string {

@@ -1,0 +1,59 @@
+cd ~/projects/videocut
+ls
+git status
+npm run dev
+git status
+docker compose up -d
+docker compose logs -f api
+cd assets
+ls
+ffmpeg -i screencast.mov demo.gif
+ffmpeg -i screencast.mov -vf fps=10 demo.gif
+ffmpeg -i screencast.mov -vf fps=10,scale=720:-1 demo.gif
+ffmpeg -i screencast.mov -vf "fps=10,scale=720:-1:flags=lanczos" -loop 0 demo.gif
+man ffmpeg
+git status
+git add -A
+git commit -m "add demo gif"
+git push
+npm run dev
+docker compose up -d
+kubectl get pods
+kubectl get pods -A
+cd ~/projects/api
+curl -s https://api.example.com/v1/items
+curl -s -H "Authorization: Bearer demo-token-abc123def456ghi789" https://api.example.com/v1/items
+curl -s -H "Authorization: Bearer demo-token-abc123def456ghi789" https://api.example.com/v1/items?page=2
+curl -sf -H "Authorization: Bearer demo-token-abc123def456ghi789" --retry 3 https://api.example.com/v1/items?page=2
+git status
+npm run dev
+docker compose up -d
+tar -xvzf release.tgz
+tar -xzf release.tgz -C /tmp/release
+ls
+git status
+git push
+npm run dev
+docker compose up -d
+kubectl get pods
+git pull --rebase
+git status
+docker compose logs -f api
+npm run dev
+git push
+docker compose up -d
+kubectl get pods
+git status
+ffmpeg --help
+git pull --rebase
+npm run dev
+git push
+docker compose up -d
+git status
+kubectl get pods
+docker compose logs -f api
+git pull --rebase
+npm run dev
+git status
+git push
+docker compose up -d

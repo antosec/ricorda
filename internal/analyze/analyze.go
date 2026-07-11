@@ -40,8 +40,10 @@ const (
 	// count as the same fight.
 	chainWindow = 3
 	// simLow is the minimum edit-similarity for two commands to look like
-	// consecutive attempts at the same thing.
-	simLow = 0.55
+	// consecutive attempts at the same thing. High enough that different
+	// subcommands sharing a long prefix (docker compose up / logs) don't
+	// read as retries.
+	simLow = 0.65
 	// simMaxLen caps the length fed to the edit-distance computation.
 	simMaxLen = 300
 )
@@ -233,9 +235,13 @@ func normalize(s string) string {
 }
 
 // similar reports whether two commands look like consecutive attempts at the
-// same thing: close in edit distance but not identical.
+// same thing: same intent at token level, close in edit distance, and not
+// identical.
 func similar(a, b string) bool {
 	if a == b {
+		return false
+	}
+	if !sameIntent(a, b) {
 		return false
 	}
 	a, b = clip(a), clip(b)
@@ -248,6 +254,51 @@ func similar(a, b string) bool {
 	}
 	d := levenshtein(a, b)
 	return 1-float64(d)/float64(longest) >= simLow
+}
+
+// sameIntent guards against long shared prefixes making different
+// subcommands look like retries (docker compose up vs docker compose logs).
+// At the first place the token streams diverge, either one side inserted
+// tokens (a flag added on retry) or the diverging tokens themselves must
+// look like small edits of each other.
+func sameIntent(a, b string) bool {
+	ta, tb := strings.Fields(a), strings.Fields(b)
+	n := min(len(ta), len(tb))
+	for i := 0; i < n; i++ {
+		if ta[i] == tb[i] {
+			continue
+		}
+		if containsNear(tb, i+1, ta[i]) || containsNear(ta, i+1, tb[i]) {
+			return true
+		}
+		return tokenSimilar(ta[i], tb[i])
+	}
+	return true // one command is a token-prefix of the other
+}
+
+// containsNear reports whether tok appears within the next few tokens,
+// which is the signature of an insertion rather than a replacement.
+func containsNear(ts []string, from int, tok string) bool {
+	for i := from; i < len(ts) && i < from+3; i++ {
+		if ts[i] == tok {
+			return true
+		}
+	}
+	return false
+}
+
+// tokenSimilar reports whether two diverging tokens look like a typo fix or
+// a value extension of one another.
+func tokenSimilar(a, b string) bool {
+	a, b = strings.Trim(a, `"'`), strings.Trim(b, `"'`)
+	if len(a) >= 3 && len(b) >= 3 && (strings.HasPrefix(a, b) || strings.HasPrefix(b, a)) {
+		return true
+	}
+	longest := max(len(a), len(b))
+	if longest == 0 {
+		return false
+	}
+	return 1-float64(levenshtein(a, b))/float64(longest) >= 0.5
 }
 
 func clip(s string) string {

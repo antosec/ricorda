@@ -1,0 +1,20 @@
+Get-ChildItem -Recurse -Filter *.log
+winget install --id Git.Git
+docker compose up -d
+Get-Content .\app.log -Tail 50
+Get-Content .\app.log -Tail 50 -Wait
+npm run build
+Compress-Archive -Path .\dist -DestinationPath release.zip
+Compress-Archive -Path .\dist -DestinationPath release.zip -Force
+npm run build
+docker ps -a
+Get-ChildItem -Recurse -Filter *.log
+npm run build
+docker compose up -d
+Get-ChildItem -Recurse -Filter *.log
+winget upgrade --all
+docker ps -a
+npm run build
+Get-Content .\app.log -Tail 50
+docker compose up -d
+docker ps -a

@@ -103,6 +103,17 @@ func TestNoiseAndWrappersAreHandled(t *testing.T) {
 	}
 }
 
+func TestDifferentSubcommandsAreNotRetries(t *testing.T) {
+	reports := Analyze(entries("bash",
+		"docker compose up -d",
+		"docker compose logs -f api",
+	))
+	r := find(t, reports, "docker")
+	if len(r.HardWon) != 0 {
+		t.Fatalf("distinct subcommands misread as a retry chain: %+v", r.HardWon)
+	}
+}
+
 func TestChainsDoNotCrossSources(t *testing.T) {
 	mixed := append(entries("bash", "ffmpeg -i a.mp4 out.gif"), entries("zsh", "ffmpeg -i a.mp4 out.gf")...)
 	reports := Analyze(mixed)

@@ -6,3 +6,7 @@ coverage.out
 
 # local tooling
 .claude/
+
+# demo artifacts (the gif itself is committed)
+demo/bin/
+demo/demo-home/

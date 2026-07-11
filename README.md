@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/antosec/ricorda.svg)](https://pkg.go.dev/github.com/antosec/ricorda)
 
+![ricorda in action](demo/demo.gif)
+
 You fixed that `ffmpeg` incantation three weeks ago. It took six attempts, two trips to `--help` and one to Stack Overflow. Today you need it again and it's… gone, buried under four thousand lines of history.
 
 Generic cheatsheets ([tldr](https://github.com/tldr-pages/tldr), [cheat.sh](https://github.com/chubin/cheat.sh)) tell you what *everyone* needs. Interactive ones ([navi](https://github.com/denisidoro/navi), [cheat](https://github.com/cheat/cheat)) make you write the sheets yourself. **Your history already knows what *you* need — ricorda just writes it down.**
@@ -83,6 +85,8 @@ $ ricorda docker
 ## Contributing
 
 Issues, ideas and PRs are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). New history-source parsers are a perfect first contribution.
+
+The demo GIF is fully reproducible: it runs against fake fixture histories (never a real machine), see [demo/](demo/).
 
 ## Why "ricorda"?
 
