@@ -5,6 +5,7 @@ package project
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,8 +17,10 @@ var wslMount = regexp.MustCompile(`^/mnt/([a-z])(/|$)`)
 // slashes, WSL drive mounts folded to Windows drives, trailing slash
 // dropped, lowercased (Windows paths are case-insensitive; the rare
 // case-only distinction on Linux is a fair trade for stable matching).
+// Backslashes are replaced explicitly — filepath.ToSlash is a no-op on
+// Linux, and a Windows-written journal must match from inside WSL too.
 func Normalize(p string) string {
-	p = filepath.ToSlash(strings.TrimSpace(p))
+	p = strings.ReplaceAll(strings.TrimSpace(p), `\`, "/")
 	if m := wslMount.FindStringSubmatch(p); m != nil {
 		p = m[1] + ":" + p[len("/mnt/x"):]
 	}
@@ -47,13 +50,14 @@ func Root(dir string) string {
 }
 
 // Label returns the human name for the project containing dir: the base
-// name of its root. Safe for sheets — never the full path.
+// name of its root. Safe for sheets — never the full path. Uses slash
+// semantics so Windows-written paths label correctly on any OS.
 func Label(dir string) string {
 	root := Root(dir)
 	if root == "" {
 		return ""
 	}
-	base := filepath.Base(filepath.ToSlash(root))
+	base := path.Base(strings.ReplaceAll(root, `\`, "/"))
 	if base == "/" || base == "." || strings.HasSuffix(base, ":") {
 		return ""
 	}
