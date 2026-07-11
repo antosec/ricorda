@@ -10,6 +10,7 @@ import (
 
 	"github.com/antosec/ricorda/internal/analyze"
 	"github.com/antosec/ricorda/internal/history"
+	"github.com/antosec/ricorda/internal/journal"
 	"github.com/antosec/ricorda/internal/sheet"
 	"github.com/spf13/cobra"
 )
@@ -38,11 +39,16 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 			fmt.Fprintf(out, "  %-6s %6d commands  (%s)\n", s.Name, len(s.Entries), friendly(s.Path))
 			entries = append(entries, s.Entries...)
 		}
-		if found == 0 {
+		jour, _ := journal.ReadAll()
+		if len(jour) > 0 {
+			fmt.Fprintf(out, "  %-6s %6d records   (ground truth: exit codes + timing)\n", "hooks", len(jour))
+		}
+		if found == 0 && len(jour) == 0 {
 			return fmt.Errorf("no shell history found (looked for PowerShell, bash, zsh, fish)")
 		}
 
 		reports := analyze.Analyze(entries)
+		reports = analyze.Certify(reports, jour)
 
 		written := 0
 		when := time.Now().Format("2006-01-02")
@@ -86,7 +92,12 @@ Only aggregate numbers are printed; your commands stay in the sheets.`,
 				if i >= 3 {
 					break
 				}
-				fmt.Fprintf(out, "  %-14s %d attempts before it worked\n", r.Tool, r.HardWon[0].Attempts)
+				top := r.HardWon[0]
+				note := ""
+				if top.Certified && top.CostMS > 0 {
+					note = fmt.Sprintf("  (%s lost)", analyze.FmtDurMS(top.CostMS))
+				}
+				fmt.Fprintf(out, "  %-14s %d attempts before it worked%s\n", r.Tool, top.Attempts, note)
 			}
 			fmt.Fprintf(out, "\nTry: ricorda %s\n", fights[0].Tool)
 		} else if first := firstTool(reports); first != "" {

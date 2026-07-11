@@ -3,10 +3,13 @@
 package analyze
 
 import (
+	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/antosec/ricorda/internal/history"
+	"github.com/antosec/ricorda/internal/journal"
 	"github.com/antosec/ricorda/internal/redact"
 )
 
@@ -20,10 +23,15 @@ type ToolReport struct {
 }
 
 // HardWon is the final, working form of a command reached after visible
-// retries — the one you fought for.
+// retries — the one you fought for. Certified entries come from the journal
+// (real exit codes); the rest are inferred from history files.
 type HardWon struct {
-	Command  string
-	Attempts int
+	Command   string
+	Attempts  int
+	Certified bool
+	CostMS    int64 // wall time from first failure to victory (certified only)
+	CWD       string
+	TS        time.Time
 }
 
 // Hit is a frequently repeated non-trivial command.
@@ -178,6 +186,143 @@ func hardWon(recs []record) []HardWon {
 	return out
 }
 
+// maxFightGap is the longest pause between attempts that still counts as
+// the same fight; beyond it you probably walked away.
+const maxFightGap = 15 * time.Minute
+
+// Certify overlays ground truth from the journal onto heuristic reports:
+// fail-runs closed by a success become certified hard-won commands with a
+// real cost, upgrading a matching heuristic entry or being added. Tools
+// seen only in the journal gain their own report.
+func Certify(reports []ToolReport, jour []journal.Entry) []ToolReport {
+	fights, journalTotals := certifiedFights(jour)
+	if len(fights) == 0 {
+		return reports
+	}
+
+	idx := make(map[string]int, len(reports))
+	for i, r := range reports {
+		idx[r.Tool] = i
+	}
+
+	for _, f := range fights {
+		i, ok := idx[f.tool]
+		if !ok {
+			reports = append(reports, ToolReport{Tool: f.tool, Total: journalTotals[f.tool]})
+			i = len(reports) - 1
+			idx[f.tool] = i
+		}
+		r := &reports[i]
+
+		upgraded := false
+		for j := range r.HardWon {
+			if r.HardWon[j].Command == f.hw.Command {
+				if f.hw.Attempts > r.HardWon[j].Attempts {
+					r.HardWon[j].Attempts = f.hw.Attempts
+				}
+				r.HardWon[j].Certified = true
+				r.HardWon[j].CostMS += f.hw.CostMS
+				r.HardWon[j].CWD = f.hw.CWD
+				r.HardWon[j].TS = f.hw.TS
+				upgraded = true
+				break
+			}
+		}
+		if !upgraded {
+			r.HardWon = append(r.HardWon, f.hw)
+		}
+
+		sort.Slice(r.HardWon, func(a, b int) bool {
+			if r.HardWon[a].Certified != r.HardWon[b].Certified {
+				return r.HardWon[a].Certified
+			}
+			if r.HardWon[a].Attempts != r.HardWon[b].Attempts {
+				return r.HardWon[a].Attempts > r.HardWon[b].Attempts
+			}
+			return r.HardWon[a].Command < r.HardWon[b].Command
+		})
+		if len(r.HardWon) > maxHardWon {
+			r.HardWon = r.HardWon[:maxHardWon]
+		}
+	}
+
+	sort.Slice(reports, func(i, j int) bool {
+		if reports[i].Total != reports[j].Total {
+			return reports[i].Total > reports[j].Total
+		}
+		return reports[i].Tool < reports[j].Tool
+	})
+	return reports
+}
+
+type fight struct {
+	tool string
+	hw   HardWon
+}
+
+// certifiedFights walks the journal per tool and shell, collecting fail-runs
+// closed by a same-intent success. It also returns per-tool journal counts
+// for tools that never made it into a history file.
+func certifiedFights(jour []journal.Entry) ([]fight, map[string]int) {
+	type seqKey struct{ tool, shell string }
+	seqs := map[seqKey][]journal.Entry{}
+	var order []seqKey
+	totals := map[string]int{}
+
+	for _, e := range jour {
+		// Journal entries are redacted at write time; cleaning again here
+		// costs little and protects hand-edited or imported journals.
+		cmd := redact.Clean(normalize(e.Cmd))
+		if cmd == "" {
+			continue
+		}
+		tool, _, isHelp := classify(cmd)
+		if isHelp || tool == "" || noise[tool] {
+			continue
+		}
+		totals[tool]++
+		k := seqKey{tool, e.Shell}
+		if _, seen := seqs[k]; !seen {
+			order = append(order, k)
+		}
+		e.Cmd = cmd
+		seqs[k] = append(seqs[k], e)
+	}
+
+	var out []fight
+	for _, k := range order {
+		var run []journal.Entry
+		for _, e := range seqs[k] {
+			if len(run) > 0 {
+				prev := run[len(run)-1]
+				if !sameIntent(prev.Cmd, e.Cmd) || e.TS.Sub(prev.TS) > maxFightGap {
+					run = nil
+				}
+			}
+			if e.Exit != 0 {
+				run = append(run, e)
+				continue
+			}
+			if len(run) > 0 {
+				cost := e.TS.Sub(run[0].TS).Milliseconds() + e.DurMS
+				if cost < 0 {
+					cost = 0
+				}
+				out = append(out, fight{tool: k.tool, hw: HardWon{
+					Command:   e.Cmd,
+					Attempts:  len(run) + 1,
+					Certified: true,
+					CostMS:    cost,
+					CWD:       e.CWD,
+					TS:        e.TS,
+				}})
+				run = nil
+			}
+		}
+	}
+	return out, totals
+}
+
 // classify extracts the tool a command belongs to and whether the command is
 // a help lookup (man/tldr/help, or a --help style flag).
 func classify(cmd string) (tool, helpTarget string, isHelp bool) {
@@ -306,6 +451,19 @@ func clip(s string) string {
 		return s[:simMaxLen]
 	}
 	return s
+}
+
+// FmtDurMS renders a fight cost for humans: 45s, 23m, 1h05m.
+func FmtDurMS(ms int64) string {
+	d := time.Duration(ms) * time.Millisecond
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
 }
 
 // levenshtein computes edit distance with the classic two-row method.

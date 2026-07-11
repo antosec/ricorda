@@ -81,7 +81,7 @@ func Write(r analyze.ToolReport, generatedOn string) (string, error) {
 	if len(r.HardWon) > 0 {
 		b.WriteString("## Hard-won (you fought for these)\n\n")
 		for _, h := range r.HardWon {
-			fmt.Fprintf(&b, "- `%s`  — took %d attempts\n", h.Command, h.Attempts)
+			fmt.Fprintf(&b, "- `%s`  — took %d attempts%s\n", h.Command, h.Attempts, costNote(h))
 		}
 		b.WriteString("\n")
 	}
@@ -101,6 +101,18 @@ func Write(r analyze.ToolReport, generatedOn string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// costNote annotates a hard-won command with its measured price. Only
+// journal-certified fights have one; heuristic guesses stay unadorned.
+func costNote(h analyze.HardWon) string {
+	if !h.Certified {
+		return ""
+	}
+	if h.CostMS <= 0 {
+		return " (certified)"
+	}
+	return fmt.Sprintf(" (%s of fighting, certified)", analyze.FmtDurMS(h.CostMS))
 }
 
 // Read returns the raw markdown of a tool's sheet.
