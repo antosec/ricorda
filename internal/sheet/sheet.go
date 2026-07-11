@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/antosec/ricorda/internal/analyze"
+	"github.com/antosec/ricorda/internal/paths"
 )
 
 // KeepMarker separates the generated part of a sheet from the user's own
@@ -26,14 +27,7 @@ Anything below the keep-marker survives rescans. Make it yours.
 
 // Dir returns the ricorda home directory ($RICORDA_HOME or ~/.ricorda).
 func Dir() (string, error) {
-	if d := os.Getenv("RICORDA_HOME"); d != "" {
-		return d, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".ricorda"), nil
+	return paths.Home()
 }
 
 // SheetsDir returns the directory that holds the markdown sheets.
